@@ -1,50 +1,106 @@
-import queue
-import sounddevice as sd
-import vosk
-import json
-import words
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import LogisticRegression
-from skills import *
+import config
+import stt
+import tts
+import datetime
+from num2words import num2words
+import webbrowser
+import requests
 
-q = queue.Queue()
-model = vosk.Model('model-small')
-device = sd.default.device
-samplerate = int(sd.query_devices(device[0], 'input')['default_samplerate'])
+# from fuzzywuzzy import fuzz
+# import random
 
-def callback(indata, frames, time, status):
-    q.put(bytes(indata))
+print(f"{config.VA_NAME} начал свою работу ...")
 
-def recognize(data, vectorizer, clf):
-    trg = words.TRIGGERS.intersection(data.split())
-    if not trg:
-        return
-    data.replace(list(trg)[0], '')
-    text_vector = vectorizer.transform([data]).toarray()[0]
-    answer = clf.predict([text_vector])[0]
-    # print(answer)
+def va_respond(voice: str):
+    print(' - вопрос: ', voice)
+    if voice.startswith(config.VA_ALIAS):
+        # cmd = recognize_cmd(filter_cmd(voice))
+        cmd = filter_cmd(voice)
+        print(' - va_respond cmd: ', cmd)
+        cmd_split = cmd.split()
 
-    func_name = answer.split()[0]
-    speaker(answer.replace(func_name, ''))
-    exec(func_name + '()')
+        if cmd == 'тест':
+            print(' - ТЕСТ! - ')
+
+        elif 'найди' in cmd_split:
+            print(' - cmd_split: ', cmd_split)
+            print(' - запускаем чат бот!')
+
+        for k, v in config.VA_CMD_LIST.items():
+            if cmd in v:
+                print(' - find! key: ', k)
+                execute_cmd(k)
+
+        # else:
+        #     print(' - Что?')
+        #     tts.va_speak("Что?")
 
 
-def main():
-    vectorizer = CountVectorizer()
-    vectors = vectorizer.fit_transform(list(words.data_set.keys()))
-    clf = LogisticRegression()
-    clf.fit(vectors, list(words.data_set.values()))
-    del words.data_set
+def filter_cmd(raw_voice: str):
+    cmd = raw_voice
 
-    with sd.RawInputStream(samplerate=samplerate, blocksize=16000, device=device[0], dtype="int16", channels=1,
-                           callback=callback):
-        rec = vosk.KaldiRecognizer(model, samplerate)
-        while True:
-            data = q.get()
-            if rec.AcceptWaveform(data):
-                data = json.loads(rec.Result())['text']
-                print(data)
-                recognize(data, vectorizer, clf)
+    for x in config.VA_ALIAS:
+        cmd = cmd.replace(x, "").strip()
 
-if __name__ == '__main__':
-    main()
+    for x in config.VA_TBR:
+        cmd = cmd.replace(x, "").strip()
+
+    print(' - cmd: ', cmd)
+    return cmd
+
+
+# def recognize_cmd(cmd: str):
+#     print(' - recognize_cmd: ', cmd)
+#     rc = {'cmd': '', 'percent': 0}
+#     for c, v in config.VA_CMD_LIST.items():
+#         for x in v:
+#             # vrt = fuzz.ratio(cmd, x)
+#             vrt = cmd, x
+#             print(' - vrt:', vrt)
+#             if vrt > rc['percent']:
+#                 rc['cmd'] = c
+#                 rc['percent'] = vrt
+#     print(' - rc: ', rc)
+#     return rc
+    # print(cmd)
+    # return cmd
+
+
+def execute_cmd(cmd: str):
+
+
+    if cmd == 'help':
+        print(' - execute_cmd help: ', cmd)
+        # help
+        text = "Я умею: ..."
+        text += "произносить время ..."
+        text += "рассказывать анекдоты ..."
+        text += "и открывать браузер"
+        tts.va_speak(text)
+        pass
+
+    elif cmd == 'ctime':
+        print(' - execute_cmd ctime: ', cmd)
+        # current time
+        now_hours = num2words(datetime.datetime.now().hour, lang='ru')
+        now_minutes = num2words(datetime.datetime.now().minute, lang='ru')
+        text = "Сейчас " + now_hours + ' ' + now_minutes
+        print(' - ответ: ', text)
+        tts.va_speak(text)
+
+    elif cmd == 'open_browser':
+        webbrowser.open("http://python.org")
+
+    elif cmd == 'weather':
+            params = {'q': 'Kolomna', 'units': 'metric', 'lang': 'ru', 'appid': config.api_key}
+            response = requests.get(f'https://api.openweathermap.org/data/2.5/weather', params=params)
+            w = response.json()
+            print(w)
+            gradus = num2words(round(w['main']['temp']), lang='ru')
+            print(' - gradus: ', gradus)
+            print(f"На улице {w['weather'][0]['description']} {gradus}")
+            tts.va_speak(f"На улице, {w['weather'][0]['description']}, {gradus} градуса.")
+
+
+# прослушивание
+stt.va_listen(va_respond)
