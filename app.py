@@ -194,3 +194,4 @@ if __name__ == '__main__':
     thread_vosk = Thread(target=stt.va_listen, args=(va_respond,))
     thread_tg.start()
     thread_vosk.start()
+
